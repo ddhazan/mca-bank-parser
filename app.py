@@ -60,7 +60,7 @@ Bank Statement:
         }
     ]
 
-    try:
+try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=messages,
