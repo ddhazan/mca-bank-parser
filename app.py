@@ -72,8 +72,13 @@ def parse_bank_statement():
         result = response.choices[0].message["content"]
         return jsonify({"result": result}), 200
 
-    except Exception as e:
-        return jsonify({"error": f"Internal error: {str(e)}"}), 500
+    import traceback
+
+# ...inside the same function:
+except Exception as e:
+    traceback.print_exc()  # <- shows full error in Render logs
+    return jsonify({"error": f"Internal error: {str(e)}"}), 500
+
 
 # Bind to port for Render deployment
 if __name__ == "__main__":
