@@ -1,26 +1,24 @@
 import os
 import tempfile
-import traceback
 import pdfplumber
 import openai
+import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables from .env
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend (Bolt)
+CORS(app)
 
-# Health check endpoint
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "ok"}), 200
 
-# PDF upload + GPT-4o parsing
 @app.route("/api/parse-bank-statement", methods=["POST"])
 def parse_bank_statement():
     file = request.files.get("file")
@@ -28,11 +26,10 @@ def parse_bank_statement():
         return jsonify({"error": "No file uploaded"}), 400
 
     try:
-        # Save uploaded PDF to temp file
+        # Save PDF to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             file.save(tmp.name)
 
-            # Extract text from all pages
             text = ""
             with pdfplumber.open(tmp.name) as pdf:
                 for page in pdf.pages:
@@ -40,12 +37,11 @@ def parse_bank_statement():
                     if content:
                         text += content + "\n"
 
-        # Handle empty or image-only PDFs
         if not text.strip():
             return jsonify({"error": "Unable to extract text from PDF. It may be image-only or scanned without OCR."}), 422
 
-        # GPT-4o prompt
-        prompt = [
+        # Send to GPT
+        messages = [
             {
                 "role": "system",
                 "content": (
@@ -60,28 +56,23 @@ def parse_bank_statement():
             },
             {
                 "role": "user",
-                "content": text[:12000]  # Truncate if needed
+                "content": text[:12000]  # Truncate to safe GPT input size
             }
         ]
 
         response = openai.ChatCompletion.create(
             model="gpt-4o",
-            messages=prompt,
+            messages=messages,
             temperature=0.2
         )
 
         result = response.choices[0].message["content"]
         return jsonify({"result": result}), 200
 
-    
+    except Exception as e:
+        traceback.print_exc()  # Print error to Render logs
+        return jsonify({"error": f"Internal error: {str(e)}"}), 500
 
-# ...inside the same function:
-except Exception as e:
-    traceback.print_exc()  # <- shows full error in Render logs
-    return jsonify({"error": f"Internal error: {str(e)}"}), 500
-
-
-# Bind to port for Render deployment
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
