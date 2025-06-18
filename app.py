@@ -1,25 +1,3 @@
-import os
-import tempfile
-import pdfplumber
-import openai
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from dotenv import load_dotenv
-
-# Load environment variables from .env file (including OPENAI_API_KEY)
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# Initialize Flask app
-app = Flask(__name__)
-CORS(app)  # Allow CORS from any origin
-
-# Health check endpoint
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    return jsonify({"status": "ok"}), 200
-
-# PDF parsing endpoint
 @app.route("/api/parse-bank-statement", methods=["POST"])
 def parse_bank_statement():
     file = request.files.get("file")
@@ -29,6 +7,8 @@ def parse_bank_statement():
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             file.save(tmp.name)
+
+            # Extract text from PDF
             text = ""
             with pdfplumber.open(tmp.name) as pdf:
                 for page in pdf.pages:
@@ -36,24 +16,22 @@ def parse_bank_statement():
                     if content:
                         text += content + "\n"
 
+        if not text.strip():
+            return jsonify({"error": "Unable to extract text from PDF. It may be image-only or scanned without OCR."}), 422
+
+        # Send to OpenAI
         prompt = [
             {
                 "role": "system",
                 "content": (
-                    "You are a financial underwriting assistant. Analyze the text of a bank statement "
-                    "and return the following in JSON format:\n\n"
-                    "- Estimated monthly revenue\n"
-                    "- Number of NSF/returned payments\n"
-                    "- Total cash deposits\n"
-                    "- Number of days under $2,000\n"
-                    "- Total amount of inter-account transfers\n"
-                    "- Categorized transactions in array form (with date, amount, description, and category)\n\n"
-                    "Return ONLY JSON as the output."
+                    "You're a financial underwriting assistant. Read the bank statement and return JSON:\n"
+                    "- Monthly revenue\n- NSF count\n- Transfers\n- Cash deposits\n- Days under $2K\n"
+                    "- Transactions as objects with date, description, amount, category"
                 )
             },
             {
                 "role": "user",
-                "content": text[:12000]  # Limit input to first 12,000 characters
+                "content": text[:12000]
             }
         ]
 
@@ -67,9 +45,5 @@ def parse_bank_statement():
         return jsonify({"result": result})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Required for Render deployment (bind to 0.0.0.0 and PORT)
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+        # Log error and respond
+        return jsonify({"error": f"Internal error: {str(e)}"}), 500
