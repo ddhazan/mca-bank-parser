@@ -1,5 +1,6 @@
 import os
 import tempfile
+import traceback
 import pdfplumber
 import openai
 from flask import Flask, request, jsonify
@@ -72,7 +73,7 @@ def parse_bank_statement():
         result = response.choices[0].message["content"]
         return jsonify({"result": result}), 200
 
-    import traceback
+    
 
 # ...inside the same function:
 except Exception as e:
