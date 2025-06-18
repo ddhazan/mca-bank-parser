@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pdfplumber
-import openai
+from openai import OpenAI
 import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -60,13 +60,15 @@ def parse_bank_statement():
             }
         ]
 
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.2
-        )
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        result = response.choices[0].message["content"]
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    temperature=0.2
+)
+result = response.choices[0].message.content
+
         return jsonify({"result": result}), 200
 
     except Exception as e:
