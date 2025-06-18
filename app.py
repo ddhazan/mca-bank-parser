@@ -9,7 +9,11 @@ from openai import OpenAI
 
 # Load environment variables from .env
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    organization=os.getenv("OPENAI_ORG_ID")
+)
+
 
 # Initialize Flask app
 app = Flask(__name__)
