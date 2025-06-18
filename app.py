@@ -29,7 +29,11 @@ def parse_bank_statement():
                 if page_text:
                     text += page_text + "\n"
 
-    messages = [
+    @app.route("/api/health", methods=["GET"])
+def health_check():
+    return {"status": "ok"}, 200
+
+messages = [
         {
             "role": "system",
             "content": "You are a financial underwriting assistant. Read raw bank statement text and return a JSON summary + categorized transactions."
