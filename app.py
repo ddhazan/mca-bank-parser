@@ -1,76 +1,75 @@
 import os
 import tempfile
-import openai
 import pdfplumber
+import openai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+# Load environment variables from .env file (including OPENAI_API_KEY)
 load_dotenv()
-
-# Your API key is loaded from .env
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Allow CORS from any origin
 
+# Health check endpoint
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
+# PDF parsing endpoint
 @app.route("/api/parse-bank-statement", methods=["POST"])
 def parse_bank_statement():
     file = request.files.get("file")
     if not file:
-        return jsonify({"error": "No PDF file uploaded"}), 400
+        return jsonify({"error": "No file uploaded"}), 400
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        file.save(tmp.name)
-        text = ""
-        with pdfplumber.open(tmp.name) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            file.save(tmp.name)
+            text = ""
+            with pdfplumber.open(tmp.name) as pdf:
+                for page in pdf.pages:
+                    content = page.extract_text()
+                    if content:
+                        text += content + "\n"
 
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    return {"status": "ok"}, 200
+        prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a financial underwriting assistant. Analyze the text of a bank statement "
+                    "and return the following in JSON format:\n\n"
+                    "- Estimated monthly revenue\n"
+                    "- Number of NSF/returned payments\n"
+                    "- Total cash deposits\n"
+                    "- Number of days under $2,000\n"
+                    "- Total amount of inter-account transfers\n"
+                    "- Categorized transactions in array form (with date, amount, description, and category)\n\n"
+                    "Return ONLY JSON as the output."
+                )
+            },
+            {
+                "role": "user",
+                "content": text[:12000]  # Limit input to first 12,000 characters
+            }
+        ]
 
-messages = [
-        {
-            "role": "system",
-            "content": "You are a financial underwriting assistant. Read raw bank statement text and return a JSON summary + categorized transactions."
-        },
-        {
-            "role": "user",
-            "content": f"""Analyze the following bank statement and return:
-
-1. Monthly revenue (estimate)
-2. Average daily balance (if possible)
-3. Total number of NSF or returned items
-4. Total days under $2,000 balance
-5. Total cash deposits
-6. Total inter-account transfers
-7. Categorized transactions in this format:
-[
-  {{ "date": "...", "description": "...", "amount": ..., "category": "Income/Transfer/NSF/Other" }},
-  ...
-]
-
-Bank Statement:
-{text[:12000]}
-"""
-        }
-    ]
-
-try:
         response = openai.ChatCompletion.create(
             model="gpt-4o",
-            messages=messages,
+            messages=prompt,
             temperature=0.2
         )
-        parsed = response.choices[0].message["content"]
-        return jsonify({"result": parsed})
+
+        result = response.choices[0].message["content"]
+        return jsonify({"result": result})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Required for Render deployment (bind to 0.0.0.0 and PORT)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
