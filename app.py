@@ -29,7 +29,7 @@ def parse_bank_statement():
                 if page_text:
                     text += page_text + "\n"
 
-    @app.route("/api/health", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
 def health_check():
     return {"status": "ok"}, 200
 
