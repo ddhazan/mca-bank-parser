@@ -65,7 +65,7 @@ def parse_bank_statement():
         ]
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-3.5-turbo",
             messages=messages,
             temperature=0.2
         )
